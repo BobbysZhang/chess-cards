@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "skills": {
+    "godot-debugging": {
+      "source": "zate/cc-godot",
+      "sourceType": "github",
+      "computedHash": "3169dfe4d9502026658eb7e7cdcf2c78880370c905a3d1db731c94c5e841c4c5"
+    },
+    "godot-development": {
+      "source": "zate/cc-godot",
+      "sourceType": "github",
+      "computedHash": "3f647f022010f95c36b9e3a244aa38af45a37586c49beb9cddbe51de6bbbb211"
+    },
+    "godot-optimization": {
+      "source": "zate/cc-godot",
+      "sourceType": "github",
+      "computedHash": "53447fe537f8bba9efee7a0495c54603fa572058c2df7b533f9125e487c6871b"
+    },
+    "godot-ui": {
+      "source": "zate/cc-godot",
+      "sourceType": "github",
+      "computedHash": "6dacfd4fd9f2ad8a51ebca86da470e3b9d37430914441a3c9efa4bfc5094c319"
+    }
+  }
+}
