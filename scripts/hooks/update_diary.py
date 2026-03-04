@@ -5,6 +5,7 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 # 约定式提交前缀 -> 类型
 TYPE_MAP = {
@@ -66,7 +67,7 @@ def escape_cell(text: str) -> str:
     return text.replace("|", "，").replace("\n", " ").strip() or "—"
 
 
-def extract_desc_from_table_row(line: str) -> str | None:
+def extract_desc_from_table_row(line: str) -> Optional[str]:
     """从表格行中提取简述（第三列），仅处理数据行。"""
     if not re.match(r"^\| \d{2}:\d{2}\s+\| .+ \| .+ \|$", line):
         return None
