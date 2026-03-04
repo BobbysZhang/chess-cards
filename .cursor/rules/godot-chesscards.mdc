@@ -1,0 +1,31 @@
+---
+description: Godot 4 项目 ChessCards 的通用规范与上下文，与用户协作长期维护
+alwaysApply: true
+---
+
+# ChessCards — Godot 项目规则
+
+## 项目与引擎
+
+- **项目名**: ChessCards
+- **引擎**: Godot 4.6
+- **渲染**: GL Compatibility（兼容性模式）
+- **物理**: Jolt Physics
+- **脚本语言**: GDScript
+
+## 目录与资源
+
+- 场景、脚本、资源按功能放在 `res://` 下（如 `scenes/`、`scripts/`、`assets/`），保持结构清晰。
+- 新场景、脚本、资源命名与现有风格一致；无约定时用英文、小写+下划线。
+
+## GDScript 约定
+
+- 类型标注：对函数参数和返回值尽量写类型（如 `func foo(x: int) -> void`）。
+- 信号与节点：在 `_ready()` 或合适生命周期里连接；避免在未就绪时访问子节点。
+- 场景与脚本：优先用场景组合功能，脚本只写逻辑；可复用逻辑抽到 Autoload 或工具类。
+
+## 与 Cursor 协作
+
+- 本规则会随项目演进由用户提供信息后持续更新。
+- 生成或修改场景（.tscn）、资源（.tres）时，保持与 Godot 编辑器可无缝编辑。
+- 不确定的引擎/API 行为以 Godot 4.x 官方文档为准。

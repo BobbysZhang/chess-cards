@@ -1,0 +1,34 @@
+---
+description: GDScript 编码风格与常用模式
+globs: "**/*.gd"
+alwaysApply: false
+---
+
+# GDScript 规范
+
+## 风格
+
+- 用 4 空格缩进；节点、信号、常量命名用 snake_case。
+- 类型标注：函数签名尽量写清类型，例如 `func take_damage(amount: int) -> void`。
+
+## 场景与节点
+
+- 子节点用 `$NodeName` 或 `%UniqueName` 引用；复杂逻辑可先取到变量再使用。
+- 信号在 `_ready()` 里连接，或用编辑器的信号连接，避免重复连接。
+
+## 示例
+
+```gdscript
+# 推荐：类型 + 清晰命名
+func apply_effect(target: Node, duration: float) -> void:
+    if not is_instance_valid(target):
+        return
+    # ...
+```
+
+```gdscript
+# 避免：无类型、魔法数字
+func apply_effect(t, d):
+    if t:
+        await get_tree().create_timer(2.0).timeout  # 用常量或参数代替 2.0
+```
