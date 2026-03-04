@@ -1,0 +1,4 @@
+#!/bin/sh
+# 提交完成后自动在开发者日记中追加一条记录
+# 安装：cp scripts/hooks/post-commit .git/hooks/post-commit && chmod +x .git/hooks/post-commit
+cd "$(git rev-parse --show-toplevel)" && python3 scripts/hooks/update_diary.py
