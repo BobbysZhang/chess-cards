@@ -95,7 +95,7 @@ git remote add origin git@github.com:你的用户名/chess-cards.git
 git remote -v
 ```
 
-应看到 `origin` 对应你刚填的地址。
+应看到 `origin` 对应你刚填的地址。若用 SSH，会看到两行（一行带 `(fetch)`，一行带 `(push)`），这是正常的：分别表示拉取和推送用的地址，通常相同。
 
 ### 3. 推送到 GitHub
 
@@ -106,7 +106,9 @@ git branch -M main
 git push -u origin main
 ```
 
-若 GitHub 提示用 `master`，则把上面两处的 `main` 改成 `master` 即可。之后只需执行 `git push`。
+不确定当前分支是 `main` 还是 `master` 时，在项目目录执行 `git branch` 或 `git branch --show-current` 查看，带 `*` 的或输出的名字即当前分支，推送时用这个名。
+
+之后只需执行 `git push`。
 
 ---
 
@@ -172,10 +174,62 @@ git pull
 
 ---
 
-## 八、遇到问题时的排查
+## 八、初次配置时常见问题
+
+下面是在按本指南操作时可能遇到的情况及处理方式。
+
+### 1. `git remote -v` 为什么有两行？
+
+会看到两行类似：
+
+```
+origin  git@github.com:用户名/chess-cards.git (fetch)
+origin  git@github.com:用户名/chess-cards.git (push)
+```
+
+这是正常的：同一远程 `origin` 分别记录了「拉取用」和「推送用」的地址，通常相同，所以显示两行。
+
+### 2. 不确定用 main 还是 master？
+
+在项目目录执行：
+
+```bash
+git branch
+```
+
+当前分支前有 `*`。或执行 `git branch --show-current` 直接看到分支名。推送时用这个名，例如 `git push -u origin main`。
+
+### 3. 执行 `git branch -u origin main` 报错？
+
+不要用 `git branch -u origin main`（这里 `origin` 和 `main` 被当成两个参数，会报错）。首次推送应使用：
+
+```bash
+git push -u origin main
+```
+
+`-u` 会在推送的同时把当前分支的上游设为 `origin/main`。若只是要单独设置上游，应写成一个参数：`git branch -u origin/main`（中间是斜杠）。
+
+### 4. 首次 push 时提示 "Are you sure you want to continue connecting (yes/no)?"
+
+这是第一次用 SSH 连 GitHub，本机在确认是否信任该主机。在终端输入 **yes** 并回车，会把 GitHub 的主机密钥加入 `~/.ssh/known_hosts`，以后不会再问。
+
+### 5. `Permission denied (publickey)` / `Could not read from remote repository`
+
+表示 GitHub 不认可你这台电脑的 SSH 密钥，需要配置并添加公钥：
+
+1. **检查是否已有公钥**：`ls ~/.ssh/*.pub`
+2. **没有则生成**（在任意目录）：`ssh-keygen -t ed25519 -C "GitHub" -f ~/.ssh/id_ed25519 -N ""`
+3. **查看公钥**：`cat ~/.ssh/id_ed25519.pub`，复制整行（从 `ssh-ed25519` 到末尾）
+4. **添加到 GitHub**：打开 [GitHub → Settings → SSH and GPG keys](https://github.com/settings/keys) → **New SSH key** → Title 随意（如 `Mac`），Key 粘贴公钥 → **Add SSH key**
+5. **Key type**：选 **Authentication Key**（认证用，用于 push/pull）；Signing Key 是给提交签名用的，这里不需要。
+6. 保存后回到终端执行：`git push -u origin main`
+
+---
+
+## 九、遇到问题时的排查
 
 - **推送被拒绝**：先执行 `git pull`（必要时 `git pull origin main`），解决冲突后再 `git push`。
 - **忘记提交就改了别的**：可先 `git stash`，再提交，再 `git stash pop` 把改动取回。
 - **想撤销最后一次提交**：`git reset --soft HEAD~1`（保留改动，只撤销提交）。
 
-按上面步骤做完「二、三、四」，你的 ChessCards 就已经在用 GitHub 做版本管理和备份了。之后按「五、六」做日常提交和推送即可。有需要可以再一起细化分支策略或协作流程。
+按上面步骤做完「二、三、四」，你的 ChessCards 就已经在用 GitHub 做版本管理和备份了。之后按「五、六」做日常提交和推送即可。遇到提示可先看「八、初次配置时常见问题」。有需要可以再一起细化分支策略或协作流程。
