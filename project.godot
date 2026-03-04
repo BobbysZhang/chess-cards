@@ -11,8 +11,14 @@ config_version=5
 [application]
 
 config/name="ChessCards"
+run/main_scene="res://res/scenes/lobby/lobby.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="res://icon.svg"
+
+[autoload]
+
+GameRules="*res://res/scripts/autoload/game_rules.gd"
+GameState="*res://res/scripts/autoload/game_state.gd"
 
 [physics]
 

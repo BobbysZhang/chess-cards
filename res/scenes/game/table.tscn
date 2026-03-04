@@ -1,0 +1,264 @@
+[gd_scene load_steps=2 format=3 uid="uid://table_main"]
+
+[ext_resource type="Script" path="res://res/scripts/table.gd" id="1_table"]
+
+[node name="Table" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_table")
+
+[node name="AITimer" type="Timer" parent="."]
+wait_time = 0.6
+one_shot = true
+autostart = false
+
+[node name="TableUI" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Center" type="Control" parent="TableUI"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="GameInfo" type="VBoxContainer" parent="TableUI/Center"]
+layout_mode = 1
+anchors_preset = 4
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = 100.0
+offset_top = 30.0
+offset_right = 260.0
+offset_bottom = 90.0
+grow_horizontal = 0
+grow_vertical = 2
+theme_override_constants/separation = 12
+
+[node name="DeckLabel" type="Label" parent="TableUI/Center/GameInfo"]
+layout_mode = 2
+text = "牌库: 0"
+
+[node name="TurnLabel" type="Label" parent="TableUI/Center/GameInfo"]
+layout_mode = 2
+text = "当前: -"
+
+[node name="LastDiscardFromLabel" type="Label" parent="TableUI/Center"]
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -60.0
+offset_top = -55.0
+offset_right = 60.0
+offset_bottom = -35.0
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
+horizontal_alignment = 1
+
+[node name="LastDiscard" type="Control" parent="TableUI/Center"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -40.0
+offset_top = -30.0
+offset_right = 40.0
+offset_bottom = 30.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="DiscardPileLabel" type="Label" parent="TableUI/Center"]
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = 45.0
+offset_right = 200.0
+offset_bottom = 65.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "打出的牌"
+horizontal_alignment = 1
+
+[node name="DiscardPileScroll" type="ScrollContainer" parent="TableUI/Center"]
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = 68.0
+offset_right = 300.0
+offset_bottom = 138.0
+grow_horizontal = 2
+grow_vertical = 2
+horizontal_scroll_mode = 1
+vertical_scroll_mode = 0
+
+[node name="DiscardPile" type="HBoxContainer" parent="TableUI/Center/DiscardPileScroll"]
+layout_mode = 2
+theme_override_constants/separation = 2
+size_flags_horizontal = 3
+
+[node name="OtherPlayers" type="HBoxContainer" parent="TableUI"]
+layout_mode = 1
+anchors_preset = 10
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 0.0
+offset_top = 12.0
+offset_bottom = 140.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_constants/separation = 24
+
+[node name="Seat1" type="VBoxContainer" parent="TableUI/OtherPlayers"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="Name" type="Label" parent="TableUI/OtherPlayers/Seat1"]
+layout_mode = 2
+text = "玩家2"
+
+[node name="Hand" type="HBoxContainer" parent="TableUI/OtherPlayers/Seat1"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="Melds" type="HBoxContainer" parent="TableUI/OtherPlayers/Seat1"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="Seat2" type="VBoxContainer" parent="TableUI/OtherPlayers"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="Name" type="Label" parent="TableUI/OtherPlayers/Seat2"]
+layout_mode = 2
+text = "玩家3"
+
+[node name="Hand" type="HBoxContainer" parent="TableUI/OtherPlayers/Seat2"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="Melds" type="HBoxContainer" parent="TableUI/OtherPlayers/Seat2"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="Seat3" type="VBoxContainer" parent="TableUI/OtherPlayers"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="Name" type="Label" parent="TableUI/OtherPlayers/Seat3"]
+layout_mode = 2
+text = "玩家4"
+
+[node name="Hand" type="HBoxContainer" parent="TableUI/OtherPlayers/Seat3"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="Melds" type="HBoxContainer" parent="TableUI/OtherPlayers/Seat3"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="Bottom" type="VBoxContainer" parent="TableUI"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -180.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_constants/separation = 12
+
+[node name="PlayerHand" type="HBoxContainer" parent="TableUI/Bottom"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 4
+
+[node name="PlayerMelds" type="HBoxContainer" parent="TableUI/Bottom"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="ActionButtons" type="HBoxContainer" parent="TableUI/Bottom"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="BtnHu" type="Button" parent="TableUI/Bottom/ActionButtons"]
+layout_mode = 2
+text = "胡"
+
+[node name="BtnKong" type="Button" parent="TableUI/Bottom/ActionButtons"]
+layout_mode = 2
+text = "杠"
+
+[node name="BtnPong" type="Button" parent="TableUI/Bottom/ActionButtons"]
+layout_mode = 2
+text = "碰"
+
+[node name="BtnClaim" type="Button" parent="TableUI/Bottom/ActionButtons"]
+layout_mode = 2
+text = "吃"
+
+[node name="BtnPass" type="Button" parent="TableUI/Bottom/ActionButtons"]
+layout_mode = 2
+text = "过"
+
+[node name="SettlementPanel" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -150.0
+offset_top = -80.0
+offset_right = 150.0
+offset_bottom = 80.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Margin" type="MarginContainer" parent="SettlementPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
+
+[node name="VBox" type="VBoxContainer" parent="SettlementPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="ResultLabel" type="Label" parent="SettlementPanel/Margin/VBox"]
+layout_mode = 2
+text = "对局结束"
+
+[node name="BtnBackLobby" type="Button" parent="SettlementPanel/Margin/VBox"]
+layout_mode = 2
+text = "返回大厅"

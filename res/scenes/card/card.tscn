@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3 uid="uid://card_tile"]
+
+[ext_resource type="Script" path="res://res/scripts/card.gd" id="1_card"]
+
+[node name="Card" type="Button"]
+custom_minimum_size = Vector2(48, 64)
+script = ExtResource("1_card")
+text = "?"

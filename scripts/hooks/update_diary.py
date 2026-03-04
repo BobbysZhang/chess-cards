@@ -5,7 +5,7 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional, Tuple
 
 # 约定式提交前缀 -> 类型
 TYPE_MAP = {
@@ -31,21 +31,44 @@ def get_repo_root() -> Path:
     return Path(out.stdout.strip())
 
 
-def get_last_commit_info() -> tuple[str, str, str]:
+def get_last_commit_date() -> str:
+    """获取最近一次提交的日期 YYYY-MM-DD。"""
     out = subprocess.run(
-        ["git", "log", "-1", "--format=%ci%n%s"],
+        ["git", "log", "-1", "--format=%ci"],
         capture_output=True,
         text=True,
         check=True,
         cwd=get_repo_root(),
     )
-    lines = out.stdout.strip().split("\n")
     # %ci: 2026-03-04 16:45:55 +0800
-    date_time = lines[0].split()
-    date = date_time[0]
-    time = date_time[1][:5]  # HH:MM
-    subject = lines[1] if len(lines) > 1 else ""
-    return date, time, subject
+    return out.stdout.strip().split()[0]
+
+
+def get_commits_for_date(date: str, root: Path) -> List[Tuple[str, str, str]]:
+    """获取指定日期当天的所有提交，按时间从早到晚排序。返回 [(HH:MM, subject, short_hash), ...]。"""
+    out = subprocess.run(
+        ["git", "log", "--format=%ci%n%s%n%h", "--reverse", "-100"],
+        capture_output=True,
+        text=True,
+        check=True,
+        cwd=root,
+    )
+    result: List[Tuple[str, str, str]] = []
+    lines = out.stdout.strip().split("\n") if out.stdout.strip() else []
+    i = 0
+    while i + 2 < len(lines):
+        date_time = lines[i].split()
+        if len(date_time) < 2:
+            i += 1
+            continue
+        commit_date = date_time[0]
+        time_str = date_time[1][:5]
+        subject = lines[i + 1]
+        short_hash = lines[i + 2] if i + 2 < len(lines) else ""
+        if commit_date == date:
+            result.append((time_str, subject, short_hash))
+        i += 3
+    return result
 
 
 def type_from_subject(subject: str) -> str:
@@ -76,6 +99,38 @@ def extract_desc_from_table_row(line: str) -> Optional[str]:
     if len(parts) >= 4 and parts[3]:
         return parts[3]
     return None
+
+
+# 简述末尾可带提交 hash，如 "feat: xxx (49c79eb)"，用于去重
+_HASH_SUFFIX_RE = re.compile(r"\s+\([0-9a-f]{7}\)$")
+
+
+def _desc_without_hash(desc: str) -> str:
+    """去掉简述末尾的 (short_hash)，便于与旧行（无 hash）比对。"""
+    return _HASH_SUFFIX_RE.sub("", desc).strip()
+
+
+def get_existing_for_date(text: str, section_header: str) -> Tuple[set, set]:
+    """返回 (已有 short_hash 集合, 已有简述集合（去掉 hash 后）)，用于去重。"""
+    existing_hashes: set = set()
+    existing_descs: set = set()
+    lines = text.split("\n")
+    in_section = False
+    for line in lines:
+        if line.strip() == section_header:
+            in_section = True
+            continue
+        if in_section:
+            if line.strip().startswith("## "):
+                break
+            desc = extract_desc_from_table_row(line)
+            if desc:
+                existing_descs.add(_desc_without_hash(desc))
+                m = _HASH_SUFFIX_RE.search(desc)
+                if m:
+                    # "(e527920)" -> "e527920"
+                    existing_hashes.add(m.group(0).strip()[1:-1])
+    return existing_hashes, existing_descs
 
 
 def fill_pending_summaries(text: str) -> str:
@@ -122,15 +177,36 @@ def main() -> None:
     if not diary_path.exists():
         return
 
-    date, time, subject = get_last_commit_info()
-    type_label = type_from_subject(subject)
-    desc = escape_cell(subject)
+    date = get_last_commit_date()
     weekday = weekday_cn(date)
-    new_row = f"| {time}  | {type_label:<10} | {desc} |"
+    commits = get_commits_for_date(date, root)
+    if not commits:
+        return
 
     text = diary_path.read_text(encoding="utf-8")
     section_header = f"## {date}（{weekday}）"
     table_row_re = re.compile(r"^\| \d{2}:\d{2}\s+\| .+ \| .+ \|$")
+    existing_hashes, existing_descs = (
+        get_existing_for_date(text, section_header) if section_header in text else (set(), set())
+    )
+
+    # 收集当日尚未出现在日记中的提交（按 hash 或简述去重），按时间顺序
+    rows_to_add: List[Tuple[str, str, str]] = []
+    for time_str, subject, short_hash in commits:
+        desc_normalized = _desc_without_hash(escape_cell(subject))
+        if short_hash not in existing_hashes and desc_normalized not in existing_descs:
+            type_label = type_from_subject(subject)
+            desc_cell = escape_cell(subject) + " (" + short_hash + ")"
+            rows_to_add.append((time_str, type_label, desc_cell))
+            existing_hashes.add(short_hash)
+            existing_descs.add(desc_normalized)
+
+    if not rows_to_add:
+        text = fill_pending_summaries(text)
+        diary_path.write_text(text, encoding="utf-8")
+        return
+
+    new_rows_str = "\n".join(f"| {t}  | {tl:<10} | {d} |" for t, tl, d in rows_to_add)
 
     if section_header not in text:
         # 新日期：在最后一个日期区块与「安装」说明之间插入新区块
@@ -138,16 +214,15 @@ def main() -> None:
             f"\n{section_header}\n\n"
             "| 时间   | 类型       | 简述 |\n"
             "|--------|------------|------|\n"
-            f"{new_row}\n\n"
+            f"{new_rows_str}\n\n"
             "**当日小结**：待补充。"
         )
-        # 在「---」与「安装」之间插入
         if "\n---\n\n安装" in text:
             text = text.replace("\n---\n\n安装", "\n\n" + block + "\n\n---\n\n安装", 1)
         else:
             text = text.rstrip() + "\n\n" + block + "\n\n---\n"
     else:
-        # 已有该日期：在当日最后一个表格数据行后插入
+        # 已有该日期：在当日最后一个表格数据行后一次性插入所有新行
         lines = text.split("\n")
         insert_after = None
         in_section = False
@@ -161,16 +236,18 @@ def main() -> None:
                 if table_row_re.match(line):
                     insert_after = i
         if insert_after is not None:
-            lines.insert(insert_after + 1, new_row)
+            for row in new_rows_str.split("\n"):
+                lines.insert(insert_after + 1, row)
+                insert_after += 1
             text = "\n".join(lines)
         else:
-            # 只找到标题没找到数据行，在分隔行后插
             for i, line in enumerate(lines):
                 if line.strip() == section_header:
-                    # 找下一个 |---|
                     for j in range(i + 1, min(i + 5, len(lines))):
                         if re.match(r"^\|[-]+\|", lines[j]):
-                            lines.insert(j + 1, new_row)
+                            for row in new_rows_str.split("\n"):
+                                lines.insert(j + 1, row)
+                                j += 1
                             text = "\n".join(lines)
                             break
                     break
