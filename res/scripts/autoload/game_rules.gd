@@ -137,6 +137,52 @@ static func previous_seat(seat: int) -> int:
 static func next_seat(seat: int) -> int:
 	return (seat + PLAYER_COUNT - 1) % PLAYER_COUNT
 
+## 三张牌是否为合法「吃」组合（将士象、车马包、三色兵卒，GAME_RULES 五）
+static func is_valid_claim_meld(tiles: Array) -> bool:
+	if tiles.size() != 3:
+		return false
+	var r0: int = tiles[0].get("rank", -1)
+	var r1: int = tiles[1].get("rank", -1)
+	var r2: int = tiles[2].get("rank", -1)
+	var s0: int = tiles[0].get("suit", -1)
+	var s1: int = tiles[1].get("suit", -1)
+	var s2: int = tiles[2].get("suit", -1)
+	# 三张相同则不是吃的顺子（是碰）
+	if r0 == r1 and r1 == r2:
+		return false
+	var ranks := [r0, r1, r2]
+	ranks.sort()
+	# 将士象：同色，将+士+象 (0,1,2)
+	if ranks[0] == Rank.KING and ranks[1] == Rank.ADVISOR and ranks[2] == Rank.ELEPHANT and s0 == s1 and s1 == s2:
+		return true
+	# 车马包：同色，车+马+包 (3,4,5)
+	if ranks[0] == Rank.ROOK and ranks[1] == Rank.HORSE and ranks[2] == Rank.CANNON and s0 == s1 and s1 == s2:
+		return true
+	# 三色兵卒：三张卒、三种不同花色
+	if r0 == Rank.PAWN and r1 == Rank.PAWN and r2 == Rank.PAWN and s0 != s1 and s1 != s2 and s0 != s2:
+		return true
+	return false
+
+## 三张牌组成的「吃」组合类型（将士象 / 车马包 / 三色兵卒）；非合法吃返回 -1
+static func get_claim_meld_type(tiles: Array) -> int:
+	if tiles.size() != 3 or not is_valid_claim_meld(tiles):
+		return -1
+	var r0: int = tiles[0].get("rank", -1)
+	var r1: int = tiles[1].get("rank", -1)
+	var r2: int = tiles[2].get("rank", -1)
+	var s0: int = tiles[0].get("suit", -1)
+	var s1: int = tiles[1].get("suit", -1)
+	var s2: int = tiles[2].get("suit", -1)
+	var ranks := [r0, r1, r2]
+	ranks.sort()
+	if ranks[0] == Rank.KING and ranks[1] == Rank.ADVISOR and ranks[2] == Rank.ELEPHANT and s0 == s1 and s1 == s2:
+		return MeldType.KING_ADVISOR_ELEPHANT
+	if ranks[0] == Rank.ROOK and ranks[1] == Rank.HORSE and ranks[2] == Rank.CANNON and s0 == s1 and s1 == s2:
+		return MeldType.ROOK_HORSE_CANNON
+	if r0 == Rank.PAWN and r1 == Rank.PAWN and r2 == Rank.PAWN and s0 != s1 and s1 != s2 and s0 != s2:
+		return MeldType.THREE_PAWN
+	return -1
+
 ## 某组合的胡数；is_exposed 表示已亮出（碰/杠/吃出）
 static func get_meld_hu_points(meld_type: int, is_exposed: bool, is_king_kong: bool) -> int:
 	if is_king_kong and meld_type == MeldType.KONG:

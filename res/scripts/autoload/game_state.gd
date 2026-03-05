@@ -37,6 +37,11 @@ var final_hu_points: int = 0
 var first_discard_of_round: Dictionary = {}
 ## 本局所有打出的牌（按顺序），每项 { "seat": int, "card": dict }，用于牌桌展示
 var discard_history: Array = []
+## 摸牌后必须打出该牌：刚摸牌的座位（-1 表示无）；该座位出牌时只能打出 last_drawn_card
+var last_drawn_seat: int = -1
+var last_drawn_card: Dictionary = {}
+## 最后打出的牌是否来自「摸牌后打出」：是则出牌者可响应且自己吃优先于下家吃，否则出牌者不可响应、仅下家可吃
+var last_discard_from_draw: bool = false
 
 signal state_changed
 signal game_started
@@ -66,6 +71,9 @@ func new_game() -> void:
 	response_order = []
 	must_discard_only = false
 	discard_history.clear()
+	last_drawn_seat = -1
+	last_drawn_card = {}
+	last_discard_from_draw = false
 	game_started.emit()
 	state_changed.emit()
 
@@ -73,17 +81,20 @@ func new_game() -> void:
 func set_dealer(seat: int) -> void:
 	dealer_seat = seat
 
-## 开始响应阶段：从出牌者下家起算响应顺序（仅另外三家，不含出牌者）
+## 开始响应阶段：摸牌后打出则 [出牌者, 下家, 下下家]（自己可响应，自己吃>下家吃）；从手牌打出则仅 [下家, 下下家, 下下下家]（自己不可响应，仅下家可吃）
 func _start_response_phase() -> void:
 	waiting_for_response = true
 	response_order.clear()
+	if last_discard_from_draw:
+		response_order.append(last_discard_seat)
 	var s := GameRules.next_seat(last_discard_seat)
-	for _i in range(GameRules.PLAYER_COUNT - 1):
+	var n: int = 3 if not last_discard_from_draw else 2
+	for _i in range(n):
 		response_order.append(s)
 		s = GameRules.next_seat(s)
 	state_changed.emit()
 
-## 打出一张牌（手牌索引）。将/帅不可打出，由调用方保证或这里校验
+## 打出一张牌（手牌索引）。将/帅不可打出；摸牌后必须打出刚摸到的那张。
 func play_discard(player_seat: int, hand_index: int) -> bool:
 	if game_ended or waiting_for_response:
 		return false
@@ -94,10 +105,18 @@ func play_discard(player_seat: int, hand_index: int) -> bool:
 	var card: Dictionary = hands[player_seat][hand_index]
 	if not GameRules.can_discard(card):
 		return false
+	# 摸牌后必须打出刚摸到的那张，询问他人碰杠胡；记录是否「摸牌后打出」以决定响应顺序与谁可吃
+	var from_draw: bool = (last_drawn_seat == player_seat and not last_drawn_card.is_empty() and GameRules.card_equals(card, last_drawn_card))
+	if last_drawn_seat == player_seat and not last_drawn_card.is_empty():
+		if not GameRules.card_equals(card, last_drawn_card):
+			return false
+		last_drawn_seat = -1
+		last_drawn_card = {}
 	must_discard_only = false
 	hands[player_seat].remove_at(hand_index)
 	last_discard = card
 	last_discard_seat = player_seat
+	last_discard_from_draw = from_draw
 	discard_history.append({"seat": player_seat, "card": card})
 	if first_discard_of_round.is_empty():
 		first_discard_of_round = card
@@ -116,7 +135,9 @@ func draw_from_deck(player_seat: int) -> Dictionary:
 		return {}
 	var card: Dictionary = deck.pop_back()
 	hands[player_seat].append(card)
-	# 摸牌后当前玩家需要再打出一张，不进入响应；若摸到将帅需特殊处理（简化：允许先摸再打）
+	last_drawn_seat = player_seat
+	last_drawn_card = card
+	# 摸牌后当前玩家必须打出这张牌，打出后询问他人碰杠胡；若摸到将帅需特殊处理（简化：允许先摸再打）
 	state_changed.emit()
 	return card
 
@@ -136,6 +157,149 @@ func pass_response(player_seat: int) -> void:
 		print("[GameState] pass_response: 玩家%d 过, order=%s, empty=%s" % [player_seat + 1, str(response_order), response_order.is_empty()])
 	# 每次有人 pass 都通知 UI 刷新，以便继续轮到下一位或进入下家摸牌
 	state_changed.emit()
+
+## 检查某座位是否可执行胡（不修改状态）；从手牌打出时自己不能响应，摸牌后打出时自己可胡
+func can_hu(responder_seat: int) -> bool:
+	if game_ended or not waiting_for_response or not responder_seat in response_order:
+		return false
+	if responder_seat == last_discard_seat and not last_discard_from_draw:
+		return false  # 从手牌打出时自己不可操作
+	if last_discard.is_empty():
+		return false
+	var hand_with_discard: Array = hands[responder_seat].duplicate()
+	hand_with_discard.append(last_discard)
+	var hu_result := _compute_hu(hand_with_discard, melds[responder_seat])
+	return hu_result.can_hu
+
+## 检查某座位是否可执行碰（手牌至少 2 张与 last_discard 相同）；从手牌打出时自己不可碰
+func can_pong(responder_seat: int) -> bool:
+	if game_ended or not waiting_for_response or not responder_seat in response_order:
+		return false
+	if responder_seat == last_discard_seat and not last_discard_from_draw:
+		return false
+	if last_discard.is_empty():
+		return false
+	var count := 0
+	for c in hands[responder_seat]:
+		if GameRules.card_equals(c, last_discard):
+			count += 1
+	return count >= 2
+
+## 检查某座位是否可执行杠（手牌至少 3 张与 last_discard 相同）；从手牌打出时自己不可杠
+func can_kong(responder_seat: int) -> bool:
+	if game_ended or not waiting_for_response or not responder_seat in response_order:
+		return false
+	if responder_seat == last_discard_seat and not last_discard_from_draw:
+		return false
+	if last_discard.is_empty():
+		return false
+	var count := 0
+	for c in hands[responder_seat]:
+		if GameRules.card_equals(c, last_discard):
+			count += 1
+	return count >= 3
+
+## 检查某座位是否可执行吃：从手牌打出时仅下家可吃；摸牌后打出时自己可吃且自己吃优先于下家吃
+func can_claim(responder_seat: int) -> bool:
+	if game_ended or not waiting_for_response or not responder_seat in response_order:
+		return false
+	if last_discard.is_empty():
+		return false
+	# 从手牌打出：仅下家可吃
+	if not last_discard_from_draw:
+		if GameRules.previous_seat(responder_seat) != last_discard_seat:
+			return false
+	else:
+		# 摸牌后打出：自己或下家可吃（自己吃优先由 response_order 顺序保证）
+		if responder_seat != last_discard_seat and GameRules.previous_seat(responder_seat) != last_discard_seat:
+			return false
+	var hand: Array = hands[responder_seat]
+	for i in range(hand.size()):
+		for j in range(i + 1, hand.size()):
+			if GameRules.is_valid_claim_meld([last_discard, hand[i], hand[j]]):
+				return true
+	return false
+
+## 响应阶段吃上家牌：返回第一组可用的两张手牌索引 [i, j]，无则返回 []
+func get_claim_response_hand_indices(responder_seat: int) -> Array:
+	var result: Array = []
+	if not can_claim(responder_seat):
+		return result
+	var hand: Array = hands[responder_seat]
+	for i in range(hand.size()):
+		for j in range(i + 1, hand.size()):
+			if GameRules.is_valid_claim_meld([last_discard, hand[i], hand[j]]):
+				result.append(i)
+				result.append(j)
+				return result
+	return result
+
+## 检查是否可「自己吃摸出来的牌」：刚摸牌且手牌中有两张可与摸到的牌组成合法吃
+func can_claim_own_draw(seat: int) -> bool:
+	if game_ended or waiting_for_response:
+		return false
+	if last_drawn_seat != seat or last_drawn_card.is_empty():
+		return false
+	var hand: Array = hands[seat]
+	for i in range(hand.size()):
+		for j in range(i + 1, hand.size()):
+			if GameRules.is_valid_claim_meld([last_drawn_card, hand[i], hand[j]]):
+				return true
+	return false
+
+## 返回「自己吃摸出来的牌」时用的两张手牌索引（第一组有效）；无则返回 []。
+func get_claim_own_draw_hand_indices(seat: int) -> Array:
+	var result: Array = []
+	if last_drawn_seat != seat or last_drawn_card.is_empty():
+		return result
+	var hand: Array = hands[seat]
+	for i in range(hand.size()):
+		for j in range(i + 1, hand.size()):
+			if GameRules.is_valid_claim_meld([last_drawn_card, hand[i], hand[j]]):
+				result.append(i)
+				result.append(j)
+				return result
+	return result
+
+## 自己吃摸出来的牌：用 last_drawn_card 与手牌中 used_hand_indices 的两张组成吃，然后必须出牌
+func do_claim_own_draw(seat: int, used_hand_indices: Array) -> bool:
+	if game_ended or waiting_for_response or seat != current_player:
+		return false
+	if last_drawn_seat != seat or last_drawn_card.is_empty():
+		return false
+	if used_hand_indices.size() < 2:
+		return false
+	var hand: Array = hands[seat]
+	var i0: int = used_hand_indices[0]
+	var i1: int = used_hand_indices[1]
+	if i0 < 0 or i1 < 0 or i0 >= hand.size() or i1 >= hand.size() or i0 == i1:
+		return false
+	var tiles: Array = [last_drawn_card, hand[i0], hand[i1]]
+	if not GameRules.is_valid_claim_meld(tiles):
+		return false
+	var meld_type: int = GameRules.get_claim_meld_type(tiles)
+	if meld_type < 0:
+		return false
+	# 找到摸到的牌在手中的索引（最后一张即为刚摸的）
+	var drawn_idx: int = hand.size() - 1
+	for k in range(hand.size()):
+		if GameRules.card_equals(hand[k], last_drawn_card):
+			drawn_idx = k
+			break
+	var to_remove: Array = [drawn_idx, i0, i1]
+	to_remove.sort()
+	for k in range(to_remove.size() - 1, -1, -1):
+		hand.remove_at(to_remove[k])
+	melds[seat].append({
+		"type": meld_type,
+		"tiles": tiles,
+		"from_seat": seat
+	})
+	last_drawn_seat = -1
+	last_drawn_card = {}
+	must_discard_only = true
+	state_changed.emit()
+	return true
 
 ## 执行胡（叫胡）。返回是否成功；若成功会结束对局
 func do_hu(responder_seat: int) -> bool:
@@ -195,6 +359,8 @@ func do_pong(responder_seat: int) -> bool:
 	waiting_for_response = false
 	current_player = responder_seat
 	must_discard_only = true
+	last_drawn_seat = -1
+	last_drawn_card = {}
 	state_changed.emit()
 	return true
 
@@ -227,14 +393,18 @@ func do_kong(responder_seat: int) -> bool:
 	waiting_for_response = false
 	current_player = responder_seat
 	must_discard_only = true
+	last_drawn_seat = -1
+	last_drawn_card = {}
 	state_changed.emit()
 	return true
 
-## 吃：仅上家；used_hand_indices 为手牌中用于组成吃的两张牌的索引
+## 吃：从手牌打出仅下家可吃；摸牌后打出则自己可吃且自己吃优先于下家吃；used_hand_indices 为手牌中用于组成吃的两张牌的索引
 func do_claim(responder_seat: int, meld_type: int, used_hand_indices: Array) -> bool:
 	if game_ended or not waiting_for_response:
 		return false
-	if GameRules.previous_seat(responder_seat) != last_discard_seat:
+	if responder_seat == last_discard_seat and not last_discard_from_draw:
+		return false  # 从手牌打出时自己不能吃
+	if responder_seat != last_discard_seat and GameRules.previous_seat(responder_seat) != last_discard_seat:
 		return false
 	if not responder_seat in response_order:
 		return false
@@ -260,6 +430,8 @@ func do_claim(responder_seat: int, meld_type: int, used_hand_indices: Array) -> 
 	waiting_for_response = false
 	current_player = responder_seat
 	must_discard_only = true
+	last_drawn_seat = -1
+	last_drawn_card = {}
 	state_changed.emit()
 	return true
 
