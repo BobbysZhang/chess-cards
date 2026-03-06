@@ -9,20 +9,20 @@ const HUMAN_SEAT := 0
 @onready var last_discard_from_label: Label = $TableUI/Center/LastDiscardFromLabel
 @onready var last_discard_container: Control = $TableUI/Center/LastDiscard
 @onready var discard_pile_container: HBoxContainer = $TableUI/Center/DiscardPileScroll/DiscardPile
-## 他家手牌/副露：Seat1(上家左)、Seat2(对家)、Seat3(下家右)；左右两家为 VBox 竖排，对家为 HBox 横排
+## 他家手牌/副露：Seat1(上家左)、Seat2(对家)、Seat3(下家右)；左右两家为 VBox 竖排，对家为 HBox 横排；各在 LeftWrap/TopWrap/RightWrap 内居中
 @onready var other_seat_hand: Array[BoxContainer] = [
-	$TableUI/OtherPlayers/Seat1/Hand,
-	$TableUI/OtherPlayers/Seat2/Hand,
-	$TableUI/OtherPlayers/Seat3/Hand
+	$TableUI/OtherPlayers/LeftWrap/Seat1/Hand,
+	$TableUI/OtherPlayers/TopWrap/Seat2/Hand,
+	$TableUI/OtherPlayers/RightWrap/Seat3/Hand
 ]
 @onready var other_seat_melds: Array[BoxContainer] = [
-	$TableUI/OtherPlayers/Seat1/Melds,
-	$TableUI/OtherPlayers/Seat2/Melds,
-	$TableUI/OtherPlayers/Seat3/Melds
+	$TableUI/OtherPlayers/LeftWrap/Seat1/Melds,
+	$TableUI/OtherPlayers/TopWrap/Seat2/Melds,
+	$TableUI/OtherPlayers/RightWrap/Seat3/Melds
 ]
-@onready var player_hand: HBoxContainer = $TableUI/Bottom/PlayerHand
-@onready var player_melds: HBoxContainer = $TableUI/Bottom/PlayerMelds
-@onready var action_buttons: HBoxContainer = $TableUI/Bottom/ActionButtons
+@onready var player_hand: HBoxContainer = $TableUI/BottomWrap/Bottom/PlayerHand
+@onready var player_melds: HBoxContainer = $TableUI/BottomWrap/Bottom/PlayerMelds
+@onready var action_buttons: HBoxContainer = $TableUI/BottomWrap/Bottom/ActionButtons
 @onready var settlement_panel: PanelContainer = $SettlementPanel
 @onready var settlement_label: Label = $SettlementPanel/Margin/VBox/ResultLabel
 @onready var btn_back_lobby: Button = $SettlementPanel/Margin/VBox/BtnBackLobby
