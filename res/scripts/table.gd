@@ -9,12 +9,13 @@ const HUMAN_SEAT := 0
 @onready var last_discard_from_label: Label = $TableUI/Center/LastDiscardFromLabel
 @onready var last_discard_container: Control = $TableUI/Center/LastDiscard
 @onready var discard_pile_container: HBoxContainer = $TableUI/Center/DiscardPileScroll/DiscardPile
-@onready var other_seat_hand: Array[HBoxContainer] = [
+## 他家手牌/副露：Seat1(上家左)、Seat2(对家)、Seat3(下家右)；左右两家为 VBox 竖排，对家为 HBox 横排
+@onready var other_seat_hand: Array[BoxContainer] = [
 	$TableUI/OtherPlayers/Seat1/Hand,
 	$TableUI/OtherPlayers/Seat2/Hand,
 	$TableUI/OtherPlayers/Seat3/Hand
 ]
-@onready var other_seat_melds: Array[HBoxContainer] = [
+@onready var other_seat_melds: Array[BoxContainer] = [
 	$TableUI/OtherPlayers/Seat1/Melds,
 	$TableUI/OtherPlayers/Seat2/Melds,
 	$TableUI/OtherPlayers/Seat3/Melds
@@ -48,6 +49,14 @@ func _seat_label(seat: int) -> String:
 	if seat == GameRules.next_seat(HUMAN_SEAT):
 		return "玩家%d(下家)" % n
 	return "玩家%d(对家)" % n
+
+## 他家座位牌面旋转：上家(左)-90°，下家(右)90°，对家不旋转
+func _other_seat_rotation_degrees(seat: int) -> float:
+	if seat == GameRules.previous_seat(HUMAN_SEAT):
+		return -90.0
+	if seat == GameRules.next_seat(HUMAN_SEAT):
+		return 90.0
+	return 0.0
 
 ## 日志：某玩家出牌
 func _log_discard(seat: int, card: Dictionary) -> void:
@@ -192,8 +201,8 @@ func _refresh_player_melds() -> void:
 
 func _refresh_other_players() -> void:
 	for seat in range(1, 4):
-		var hand_container: HBoxContainer = other_seat_hand[seat - 1]
-		var melds_container: HBoxContainer = other_seat_melds[seat - 1]
+		var hand_container: BoxContainer = other_seat_hand[seat - 1]
+		var melds_container: BoxContainer = other_seat_melds[seat - 1]
 		if not hand_container or not melds_container:
 			continue
 		for c in hand_container.get_children():
@@ -201,11 +210,14 @@ func _refresh_other_players() -> void:
 		for c in melds_container.get_children():
 			c.queue_free()
 		var hand: Array = GameState.hands[seat]
+		var rot: float = _other_seat_rotation_degrees(seat)
 		for _i in range(hand.size()):
 			var card_node: Button = card_scene.instantiate() as Button
 			hand_container.add_child(card_node)
 			card_node.set_face_down(true)
 			card_node.disabled = true
+			if card_node.has_method("set_vertical_rotation") and not is_equal_approx(rot, 0.0):
+				card_node.set_vertical_rotation(rot)
 		for meld in GameState.melds[seat]:
 			var tiles: Array = meld.get("tiles", [])
 			for tile in tiles:
@@ -213,6 +225,8 @@ func _refresh_other_players() -> void:
 				melds_container.add_child(card_node)
 				if card_node.has_method("set_card"):
 					card_node.set_card(tile)
+				if card_node.has_method("set_vertical_rotation") and not is_equal_approx(rot, 0.0):
+					card_node.set_vertical_rotation(rot)
 				if card_node is Button:
 					card_node.disabled = true
 

@@ -1,10 +1,21 @@
-# Card — 单张牌展示，支持 set_card(data) 与点击出牌
+# Card — 单张牌展示，支持 set_card(data) 与点击出牌；左右两家可竖摆并旋转牌面
 extends Button
 
 const GameRules = preload("res://res/scripts/autoload/game_rules.gd")
 
 var _card_data: Dictionary = {}
 var face_down: bool = false
+
+## 竖摆时旋转角度：0=不旋转，-90=左侧上家，90=右侧下家
+func set_vertical_rotation(degrees: float) -> void:
+	if is_equal_approx(degrees, 0.0):
+		custom_minimum_size = Vector2(48, 64)
+		pivot_offset = Vector2.ZERO
+		rotation_degrees = 0.0
+	else:
+		custom_minimum_size = Vector2(64, 48)
+		pivot_offset = Vector2(32, 24)
+		rotation_degrees = degrees
 
 func set_card(data: Dictionary) -> void:
 	_card_data = data
