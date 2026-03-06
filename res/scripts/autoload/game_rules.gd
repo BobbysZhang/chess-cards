@@ -218,3 +218,12 @@ static func suit_name(s: int) -> String:
 		Suit.WHITE: return "白"
 		Suit.GREEN: return "绿"
 	return "?"
+
+## 花色对应的显示颜色（GAME_RULES 1.1 黄、红、白、绿）
+static func suit_color(s: int) -> Color:
+	match s:
+		Suit.RED: return Color(0.85, 0.2, 0.2)      # 红
+		Suit.YELLOW: return Color(0.9, 0.75, 0.15)  # 黄
+		Suit.WHITE: return Color(0.92, 0.92, 0.88) # 白（略偏灰以便在浅底上可见）
+		Suit.GREEN: return Color(0.2, 0.65, 0.3)    # 绿
+	return Color(0.6, 0.6, 0.6)
