@@ -57,6 +57,8 @@ flowchart LR
 
 以下为与 [GAME_RULES.md](GAME_RULES.md) 第四、五节对应的实现要点，避免实现时偏离规则或出现流程卡死。
 
+- **吃与碰的定义（组合类型）**  
+  **吃** = **两张相同**（上家牌 + 手牌一张相同的牌，成对）或 **三张组合**（将士象 / 车马包 / 三色兵卒）。**碰** = **三张相同**（上家牌 + 手牌两张相同的牌）。优先权 碰 > 吃；实现上 `can_claim` / `get_claim_response_hand_indices` / `do_claim` 支持成对（1 张手牌）与三张（2 张手牌），`do_claim_own_draw` 同理。
 - **响应阶段与 response_order**  
   - **从手牌打出**：出牌者**不**进入响应队列，仅 **\[下家, 下下家, 下下下家]** 可响应；优先级 胡 > 杠 > 碰 > 吃，**仅下家可吃**。实现上用 `last_discard_from_draw = false`，`response_order` 不含出牌者。
   - **摸牌后打出**：出牌者**可**响应，顺序为 **\[出牌者, 下家, 下下家]**；优先级仍 胡 > 杠 > 碰 > 吃，**自己吃优先于下家吃**。实现上 `last_discard_from_draw = true`，出牌者在 `response_order` 首位。

@@ -129,7 +129,7 @@ static func deal_cards(deck: Array, dealer_seat: int) -> Array:
 static func shuffle_deck(deck: Array) -> void:
 	deck.shuffle()
 
-## 上家座位（逆时针：0 的上家是 1，1 的上家是 2，2 的上家是 3，3 的上家是 0）
+## 上家座位（逆时针：0 的上家是 1…）。以座位 0（你）为视角：上家 = 左手边，下家 = 右手边，对家 = 对面。
 static func previous_seat(seat: int) -> int:
 	return (seat + 1) % PLAYER_COUNT
 

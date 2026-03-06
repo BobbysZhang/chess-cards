@@ -199,55 +199,71 @@ func can_kong(responder_seat: int) -> bool:
 			count += 1
 	return count >= 3
 
-## 检查某座位是否可执行吃：从手牌打出时仅下家可吃；摸牌后打出时自己可吃且自己吃优先于下家吃
+## 检查某座位是否可执行吃：只能吃上家打出的牌。吃 = 两张相同（成对）或 将士象/车马包/三色兵卒（三张）。
 func can_claim(responder_seat: int) -> bool:
 	if game_ended or not waiting_for_response or not responder_seat in response_order:
 		return false
 	if last_discard.is_empty():
 		return false
-	# 从手牌打出：仅下家可吃
+	# 吃 = 只能吃上家打的牌：previous_seat(responder)==last_discard_seat 表示「出牌者是我的上家」
 	if not last_discard_from_draw:
 		if GameRules.previous_seat(responder_seat) != last_discard_seat:
 			return false
 	else:
-		# 摸牌后打出：自己或下家可吃（自己吃优先由 response_order 顺序保证）
 		if responder_seat != last_discard_seat and GameRules.previous_seat(responder_seat) != last_discard_seat:
 			return false
 	var hand: Array = hands[responder_seat]
+	# 吃 = 两张相同：手牌一张与上家牌相同（将/帅不可吃成对）
+	if GameRules.can_discard(last_discard):
+		for i in range(hand.size()):
+			if GameRules.card_equals(hand[i], last_discard):
+				return true
+	# 吃 = 三张：将士象、车马包、三色兵卒
 	for i in range(hand.size()):
 		for j in range(i + 1, hand.size()):
 			if GameRules.is_valid_claim_meld([last_discard, hand[i], hand[j]]):
 				return true
 	return false
 
-## 响应阶段吃上家牌：返回第一组可用的两张手牌索引 [i, j]，无则返回 []
+## 响应阶段吃上家牌：成对吃返回 [i]，三张吃返回 [i, j]
 func get_claim_response_hand_indices(responder_seat: int) -> Array:
 	var result: Array = []
 	if not can_claim(responder_seat):
 		return result
 	var hand: Array = hands[responder_seat]
+	# 优先三张组合
 	for i in range(hand.size()):
 		for j in range(i + 1, hand.size()):
 			if GameRules.is_valid_claim_meld([last_discard, hand[i], hand[j]]):
 				result.append(i)
 				result.append(j)
 				return result
+	# 再试两张相同（成对吃）
+	if GameRules.can_discard(last_discard):
+		for i in range(hand.size()):
+			if GameRules.card_equals(hand[i], last_discard):
+				result.append(i)
+				return result
 	return result
 
-## 检查是否可「自己吃摸出来的牌」：刚摸牌且手牌中有两张可与摸到的牌组成合法吃
+## 检查是否可「自己吃摸出来的牌」：成对（手牌一张相同）或三张组合
 func can_claim_own_draw(seat: int) -> bool:
 	if game_ended or waiting_for_response:
 		return false
 	if last_drawn_seat != seat or last_drawn_card.is_empty():
 		return false
 	var hand: Array = hands[seat]
+	if GameRules.can_discard(last_drawn_card):
+		for i in range(hand.size()):
+			if GameRules.card_equals(hand[i], last_drawn_card):
+				return true
 	for i in range(hand.size()):
 		for j in range(i + 1, hand.size()):
 			if GameRules.is_valid_claim_meld([last_drawn_card, hand[i], hand[j]]):
 				return true
 	return false
 
-## 返回「自己吃摸出来的牌」时用的两张手牌索引（第一组有效）；无则返回 []。
+## 返回「自己吃摸出来的牌」时用的手牌索引：成对返回 [i]，三张返回 [i, j]
 func get_claim_own_draw_hand_indices(seat: int) -> Array:
 	var result: Array = []
 	if last_drawn_seat != seat or last_drawn_card.is_empty():
@@ -259,34 +275,51 @@ func get_claim_own_draw_hand_indices(seat: int) -> Array:
 				result.append(i)
 				result.append(j)
 				return result
+	if GameRules.can_discard(last_drawn_card):
+		for i in range(hand.size()):
+			if GameRules.card_equals(hand[i], last_drawn_card):
+				result.append(i)
+				return result
 	return result
 
-## 自己吃摸出来的牌：用 last_drawn_card 与手牌中 used_hand_indices 的两张组成吃，然后必须出牌
+## 自己吃摸出来的牌：成对 used_hand_indices 为 [i]，三张为 [i, j]；然后必须出牌
 func do_claim_own_draw(seat: int, used_hand_indices: Array) -> bool:
 	if game_ended or waiting_for_response or seat != current_player:
 		return false
 	if last_drawn_seat != seat or last_drawn_card.is_empty():
 		return false
-	if used_hand_indices.size() < 2:
+	if used_hand_indices.is_empty():
 		return false
 	var hand: Array = hands[seat]
-	var i0: int = used_hand_indices[0]
-	var i1: int = used_hand_indices[1]
-	if i0 < 0 or i1 < 0 or i0 >= hand.size() or i1 >= hand.size() or i0 == i1:
+	var tiles: Array = [last_drawn_card]
+	var to_remove: Array = []
+	if used_hand_indices.size() == 1:
+		var i0: int = used_hand_indices[0]
+		if i0 < 0 or i0 >= hand.size():
+			return false
+		if not GameRules.card_equals(hand[i0], last_drawn_card) or not GameRules.can_discard(last_drawn_card):
+			return false
+		tiles.append(hand[i0])
+		to_remove.append(i0)
+	else:
+		var i0: int = used_hand_indices[0]
+		var i1: int = used_hand_indices[1]
+		if i0 < 0 or i1 < 0 or i0 >= hand.size() or i1 >= hand.size() or i0 == i1:
+			return false
+		tiles = [last_drawn_card, hand[i0], hand[i1]]
+		if not GameRules.is_valid_claim_meld(tiles):
+			return false
+		to_remove.append(i0)
+		to_remove.append(i1)
+	var meld_type: int = GameRules.MeldType.PAIR if tiles.size() == 2 else GameRules.get_claim_meld_type(tiles)
+	if tiles.size() == 3 and meld_type < 0:
 		return false
-	var tiles: Array = [last_drawn_card, hand[i0], hand[i1]]
-	if not GameRules.is_valid_claim_meld(tiles):
-		return false
-	var meld_type: int = GameRules.get_claim_meld_type(tiles)
-	if meld_type < 0:
-		return false
-	# 找到摸到的牌在手中的索引（最后一张即为刚摸的）
 	var drawn_idx: int = hand.size() - 1
 	for k in range(hand.size()):
 		if GameRules.card_equals(hand[k], last_drawn_card):
 			drawn_idx = k
 			break
-	var to_remove: Array = [drawn_idx, i0, i1]
+	to_remove.append(drawn_idx)
 	to_remove.sort()
 	for k in range(to_remove.size() - 1, -1, -1):
 		hand.remove_at(to_remove[k])
@@ -398,17 +431,17 @@ func do_kong(responder_seat: int) -> bool:
 	state_changed.emit()
 	return true
 
-## 吃：从手牌打出仅下家可吃；摸牌后打出则自己可吃且自己吃优先于下家吃；used_hand_indices 为手牌中用于组成吃的两张牌的索引
+## 吃：成对吃 used_hand_indices 为 [i]，三张吃为 [i, j]
 func do_claim(responder_seat: int, meld_type: int, used_hand_indices: Array) -> bool:
 	if game_ended or not waiting_for_response:
 		return false
 	if responder_seat == last_discard_seat and not last_discard_from_draw:
-		return false  # 从手牌打出时自己不能吃
+		return false
 	if responder_seat != last_discard_seat and GameRules.previous_seat(responder_seat) != last_discard_seat:
 		return false
 	if not responder_seat in response_order:
 		return false
-	if used_hand_indices.size() < 2:
+	if used_hand_indices.is_empty():
 		return false
 	var tiles: Array = [last_discard]
 	var to_remove: Array = []
@@ -416,7 +449,12 @@ func do_claim(responder_seat: int, meld_type: int, used_hand_indices: Array) -> 
 		if i >= 0 and i < hands[responder_seat].size():
 			tiles.append(hands[responder_seat][i])
 			to_remove.append(i)
-	if tiles.size() != 3:
+	# 成对吃：2 张；三张吃：3 张
+	if tiles.size() != 2 and tiles.size() != 3:
+		return false
+	if tiles.size() == 2 and meld_type != GameRules.MeldType.PAIR:
+		return false
+	if tiles.size() == 3 and meld_type == GameRules.MeldType.PAIR:
 		return false
 	to_remove.sort()
 	for i in range(to_remove.size() - 1, -1, -1):

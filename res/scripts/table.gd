@@ -32,6 +32,36 @@ var _ai_timer_pending: bool = false
 ## 本回合出牌阶段是否已摸牌（规则：下家先摸牌再出牌，人类也需先摸再出）
 var _human_has_drawn_this_turn: bool = false
 
+## 牌面用于日志的字符串，如 "红将"
+func _card_str(card: Dictionary) -> String:
+	if card.is_empty():
+		return "?"
+	return GameRules.suit_name(card.get("suit", -1)) + GameRules.rank_name(card.get("rank", -1))
+
+## 以你为视角的座位称呼：你 / 玩家N(上家) / 玩家N(对家) / 玩家N(下家)
+func _seat_label(seat: int) -> String:
+	if seat == HUMAN_SEAT:
+		return "你"
+	var n: int = seat + 1
+	if seat == GameRules.previous_seat(HUMAN_SEAT):
+		return "玩家%d(上家)" % n
+	if seat == GameRules.next_seat(HUMAN_SEAT):
+		return "玩家%d(下家)" % n
+	return "玩家%d(对家)" % n
+
+## 日志：某玩家出牌
+func _log_discard(seat: int, card: Dictionary) -> void:
+	var who: String = _seat_label(seat)
+	print("[Table] %s 出牌: %s" % [who, _card_str(card)])
+
+## 日志：某玩家执行吃/碰/杠/胡/过；show_card 为 false 时只打 "过" 不附带牌
+func _log_action(seat: int, action: String, show_card: bool = true) -> void:
+	var who: String = _seat_label(seat)
+	if show_card and not GameState.last_discard.is_empty():
+		print("[Table] %s %s %s" % [who, action, _card_str(GameState.last_discard)])
+	else:
+		print("[Table] %s %s" % [who, action])
+
 func _ready() -> void:
 	card_scene = preload("res://res/scenes/card/card.tscn")
 	_setup_action_buttons()
@@ -70,16 +100,22 @@ func _refresh_ui() -> void:
 	if label_turn:
 		if GameState.waiting_for_response and GameState.response_order.size() > 0:
 			var resp_seat: int = GameState.response_order[0]
-			var who_resp := "你" if resp_seat == HUMAN_SEAT else "玩家%d" % (resp_seat + 1)
-			label_turn.text = "%s 响应中…" % who_resp
+			label_turn.text = "%s 响应中…" % _seat_label(resp_seat)
 		else:
-			var who := "你" if GameState.current_player == HUMAN_SEAT else "玩家%d" % (GameState.current_player + 1)
-			label_turn.text = "当前: %s" % who
+			var who: String = _seat_label(GameState.current_player)
+			if GameState.current_player == HUMAN_SEAT and _human_has_drawn_this_turn:
+				label_turn.text = "当前: %s（已摸牌，请出牌）" % who
+			else:
+				label_turn.text = "当前: %s" % who
 	# 规则 4.1/4.3：轮到玩家出牌时，先摸牌再出牌（第一手、碰/杠后只出牌不摸）
+	# 必须先置 true 再摸牌，否则 draw_from_deck 会同步 emit state_changed 导致 _refresh_ui 重入并重复摸牌
 	if GameState.current_player == HUMAN_SEAT and not GameState.waiting_for_response:
 		if not _human_has_drawn_this_turn and not GameState.must_discard_only and GameState.last_discard_seat >= 0 and GameState.deck.size() > 0:
-			GameState.draw_from_deck(HUMAN_SEAT)
 			_human_has_drawn_this_turn = true
+			GameState.draw_from_deck(HUMAN_SEAT)
+			var n: int = GameState.hands[HUMAN_SEAT].size()
+			var top: Dictionary = GameState.last_drawn_card
+			print("[Table] 你的回合(出牌)，已自动摸牌 +1 → 手牌数=%d，摸到: %s" % [n, _card_str(top)])
 	_refresh_player_hand()
 	_refresh_player_melds()
 	_refresh_other_players()
@@ -94,12 +130,12 @@ func _refresh_ui() -> void:
 		return
 	if GameState.waiting_for_response:
 		if GameState.response_order.size() > 0 and GameState.response_order[0] != HUMAN_SEAT:
-			print("[Table] _refresh_ui: defer start timer (response phase, next=玩家%d)" % (GameState.response_order[0] + 1))
+			print("[Table] _refresh_ui: defer start timer (response phase, next=%s)" % _seat_label(GameState.response_order[0]))
 			call_deferred("_start_ai_timer")
 		else:
 			print("[Table] _refresh_ui: response phase but no AI in line, order=%s" % str(GameState.response_order))
 	elif GameState.current_player != HUMAN_SEAT:
-		print("[Table] _refresh_ui: defer start timer (discard phase, current=玩家%d)" % (GameState.current_player + 1))
+		print("[Table] _refresh_ui: defer start timer (discard phase, current=%s)" % _seat_label(GameState.current_player))
 		call_deferred("_start_ai_timer")
 
 func _start_ai_timer() -> void:
@@ -183,8 +219,7 @@ func _refresh_other_players() -> void:
 func _refresh_last_discard() -> void:
 	if last_discard_from_label:
 		if GameState.last_discard_seat >= 0:
-			var who := "你" if GameState.last_discard_seat == HUMAN_SEAT else "玩家%d" % (GameState.last_discard_seat + 1)
-			last_discard_from_label.text = "%s 出牌" % who
+			last_discard_from_label.text = "%s 出牌" % _seat_label(GameState.last_discard_seat)
 		else:
 			last_discard_from_label.text = ""
 	if not last_discard_container:
@@ -250,36 +285,47 @@ func _update_action_buttons_visibility() -> void:
 func _on_play_card(hand_index: int) -> void:
 	if GameState.current_player != HUMAN_SEAT or GameState.waiting_for_response:
 		return
-	print("[Table] 你出牌 hand_index=%d" % hand_index)
+	var card: Dictionary = GameState.hands[HUMAN_SEAT][hand_index]
+	_log_discard(HUMAN_SEAT, card)
 	GameState.play_discard(HUMAN_SEAT, hand_index)
 
 func _on_btn_hu() -> void:
+	_log_action(HUMAN_SEAT, "胡")
 	GameState.do_hu(HUMAN_SEAT)
 
 func _on_btn_pong() -> void:
+	_log_action(HUMAN_SEAT, "碰")
 	GameState.do_pong(HUMAN_SEAT)
 
 func _on_btn_kong() -> void:
+	_log_action(HUMAN_SEAT, "杠")
 	GameState.do_kong(HUMAN_SEAT)
 
 func _on_btn_claim() -> void:
-	# 自己吃摸出来的牌
+	# 自己吃摸出来的牌（成对或三张）
 	if GameState.can_claim_own_draw(HUMAN_SEAT):
 		var indices: Array = GameState.get_claim_own_draw_hand_indices(HUMAN_SEAT)
-		if indices.size() >= 2:
+		if indices.size() >= 1:
+			print("[Table] 你 吃（吃摸牌） %s" % _card_str(GameState.last_drawn_card))
 			GameState.do_claim_own_draw(HUMAN_SEAT, indices)
 		return
-	# 响应阶段吃上家牌（取第一组可用组合）
+	# 响应阶段吃上家牌：成对吃 indices.size()==1，三张吃 indices.size()==2
 	if GameState.can_claim(HUMAN_SEAT):
 		var indices: Array = GameState.get_claim_response_hand_indices(HUMAN_SEAT)
-		if indices.size() >= 2:
+		if indices.size() >= 1:
 			var hand: Array = GameState.hands[HUMAN_SEAT]
-			var tiles: Array = [GameState.last_discard, hand[indices[0]], hand[indices[1]]]
-			var meld_type: int = GameRules.get_claim_meld_type(tiles)
+			var meld_type: int
+			if indices.size() == 1:
+				meld_type = GameRules.MeldType.PAIR
+			else:
+				var tiles: Array = [GameState.last_discard, hand[indices[0]], hand[indices[1]]]
+				meld_type = GameRules.get_claim_meld_type(tiles)
 			if meld_type >= 0:
+				_log_action(HUMAN_SEAT, "吃")
 				GameState.do_claim(HUMAN_SEAT, meld_type, indices)
 
 func _on_btn_pass() -> void:
+	_log_action(HUMAN_SEAT, "过", false)
 	GameState.pass_response(HUMAN_SEAT)
 
 func _on_ai_turn() -> void:
@@ -293,7 +339,7 @@ func _on_ai_turn() -> void:
 	if GameState.current_player == HUMAN_SEAT:
 		print("[Table] _on_ai_turn: current=human, return")
 		return
-	print("[Table] _on_ai_turn: discard phase, seat=%d" % GameState.current_player)
+	print("[Table] _on_ai_turn: discard phase, %s" % _seat_label(GameState.current_player))
 	_ai_discard()
 
 func _ai_response() -> void:
@@ -301,27 +347,30 @@ func _ai_response() -> void:
 		print("[Table] _ai_response: response_order empty, return")
 		return
 	var seat: int = GameState.response_order[0]
-	print("[Table] _ai_response: seat=玩家%d" % (seat + 1))
 	if GameState.do_hu(seat):
-		print("[Table] _ai_response: 胡")
+		_log_action(seat, "胡")
 		return
 	if GameState.do_kong(seat):
-		print("[Table] _ai_response: 杠")
+		_log_action(seat, "杠")
 		return
 	if GameState.do_pong(seat):
-		print("[Table] _ai_response: 碰")
+		_log_action(seat, "碰")
 		return
-	# 自己吃优先于下家吃（response_order 已含出牌者在前），碰杠胡已优先
+	# 自己吃优先于下家吃；吃 = 成对（1 张手牌）或三张组合（2 张手牌）
 	if GameState.can_claim(seat):
 		var indices: Array = GameState.get_claim_response_hand_indices(seat)
-		if indices.size() >= 2:
-			var hand: Array = GameState.hands[seat]
-			var tiles: Array = [GameState.last_discard, hand[indices[0]], hand[indices[1]]]
-			var meld_type: int = GameRules.get_claim_meld_type(tiles)
+		if indices.size() >= 1:
+			var meld_type: int
+			if indices.size() == 1:
+				meld_type = GameRules.MeldType.PAIR
+			else:
+				var hand: Array = GameState.hands[seat]
+				var tiles: Array = [GameState.last_discard, hand[indices[0]], hand[indices[1]]]
+				meld_type = GameRules.get_claim_meld_type(tiles)
 			if meld_type >= 0 and GameState.do_claim(seat, meld_type, indices):
-				print("[Table] _ai_response: 吃")
+				_log_action(seat, "吃")
 				return
-	print("[Table] _ai_response: 过")
+	_log_action(seat, "过", false)
 	GameState.pass_response(seat)
 
 func _ai_discard() -> void:
@@ -332,13 +381,17 @@ func _ai_discard() -> void:
 	# 自己吃摸出来的牌：若可与手牌组成吃则先吃，再出牌
 	if GameState.can_claim_own_draw(seat):
 		var indices: Array = GameState.get_claim_own_draw_hand_indices(seat)
-		if indices.size() >= 2 and GameState.do_claim_own_draw(seat, indices):
-			return  # state_changed 会触发刷新并再次启动 AI 计时器，接着出牌
+		if indices.size() >= 1:
+			var drawn_str: String = _card_str(GameState.last_drawn_card)
+			if GameState.do_claim_own_draw(seat, indices):
+				print("[Table] %s 吃（吃摸牌） %s" % [_seat_label(seat), drawn_str])
+				return  # state_changed 会触发刷新并再次启动 AI 计时器，接着出牌
 	var hand: Array = GameState.hands[seat]
 	# 摸牌后必须打出刚摸到的那张，再询问他人碰杠胡
 	if GameState.last_drawn_seat == seat and not GameState.last_drawn_card.is_empty():
 		for i in range(hand.size()):
 			if GameRules.card_equals(hand[i], GameState.last_drawn_card) and GameRules.can_discard(hand[i]):
+				_log_discard(seat, hand[i])
 				GameState.play_discard(seat, i)
 				return
 		# 若摸到将/帅等不可打出，仍打第一张可出的（规则简化）
@@ -346,6 +399,7 @@ func _ai_discard() -> void:
 		GameState.last_drawn_card = {}
 	for i in range(hand.size()):
 		if GameRules.can_discard(hand[i]):
+			_log_discard(seat, hand[i])
 			GameState.play_discard(seat, i)
 			return
 	GameState.check_draw()
@@ -358,7 +412,7 @@ func _on_game_ended(winner: int, is_draw: bool, hu_points: int, false_win: bool)
 	elif false_win:
 		settlement_label.text = "相公（胡数不足）"
 	else:
-		settlement_label.text = "玩家%d 胡牌，%d 胡" % [winner + 1, hu_points]
+		settlement_label.text = "%s 胡牌，%d 胡" % [_seat_label(winner), hu_points]
 
 func _settlement_visible(show: bool) -> void:
 	if settlement_panel:
